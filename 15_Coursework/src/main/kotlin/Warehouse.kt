@@ -16,10 +16,10 @@ class Warehouse {
     suspend fun channelSelectionAndLaunch() {
         when {
             UnloadingPoints.UnloadingPoint1.isAvailable -> receiveGoodsFromTruck(UnloadingPoints.UnloadingPoint1)
-            !UnloadingPoints.UnloadingPoint1.isAvailable && UnloadingPoints.UnloadingPoint2.isAvailable -> receiveGoodsFromTruck(
+            UnloadingPoints.UnloadingPoint2.isAvailable -> receiveGoodsFromTruck(
                 UnloadingPoints.UnloadingPoint2
             )
-            !UnloadingPoints.UnloadingPoint1.isAvailable && !UnloadingPoints.UnloadingPoint2.isAvailable && UnloadingPoints.UnloadingPoint3.isAvailable -> {
+            UnloadingPoints.UnloadingPoint3.isAvailable -> {
                 receiveGoodsFromTruck(UnloadingPoints.UnloadingPoint3)
             }
             else -> {
@@ -33,28 +33,30 @@ class Warehouse {
 
     private fun receiveGoodsFromTruck(currentPoint: UnloadingPoints) {
         val scope = CoroutineScope(Job() + Dispatchers.Default)
+        val a = TruckGenerator()
+        val b = a.truck
+        println(
+            "New truck arrives to Warehouse to ${currentPoint.name}. The truck's capacity: ${b.weightCapacity}kg.\n" +
+                    "The total weight of loaded goods: ${b.currentWeightLoaded}.\n" +
+                    "Truck contains: "
+        )
+        if (b.goodsOnBoard.size > 1) {
+            for (i in 0 until b.goodsOnBoard.size - 1) print("${b.goodsOnBoard[i].materialName},")
+            print("${b.goodsOnBoard[b.goodsOnBoard.size - 1].materialName}.")
+        } else if (b.goodsOnBoard.size == 1) print("${b.goodsOnBoard[0].materialName}.")
+        else println("no goods have been delivered this time")
+        println("\nStarting goods receipt, ${currentPoint.name} is locked now")
+        currentPoint.isAvailable = false
         scope.launch {
-            val a = TruckGenerator()
-            val b = a.truck
-            println(
-                "New truck arrives to Warehouse to ${currentPoint.name}. The truck's capacity: ${b.weightCapacity}kg.\n" +
-                        "The total weight of loaded goods: ${b.currentWeightLoaded}.\n" +
-                        "Truck contains: ")
-            if (b.goodsOnBoard.size > 1) {
-                for (i in 0 until b.goodsOnBoard.size - 1) print("${b.goodsOnBoard[i].materialName},")
-                print("${b.goodsOnBoard[b.goodsOnBoard.size - 1].materialName}.")
-            } else if (b.goodsOnBoard.size == 1) print("${b.goodsOnBoard[0].materialName}.")
-            else println("no goods have been delivered this time")
-            println("\nStarting goods receipt, ${currentPoint.name} is locked now")
-            currentPoint.isAvailable = false
             a.sendViaExactChannel(currentPoint.channel)  // Sending goods via a current point's channel
             repeat(b.goodsOnBoard.size) {
-                var good = currentPoint.channel.receive()
+                val good = currentPoint.channel.receive()
                 when (good.materialCategory) {
-                    "food" -> storagedFood.add(good)
-                    "small" -> storagedSmall.add(good)
-                    "medium" -> storagedMedium.add(good)
-                    "big" -> storagedBig.add(good)
+                    "Food" -> storagedFood.add(good)
+                    "Small" -> storagedSmall.add(good)
+                    "Medium" -> storagedMedium.add(good)
+                    "Big" -> storagedBig.add(good)
+                    else -> println("GOODS WERE NOT ADDED")
                 }
                 println("Receipting of ${good.materialName} via Point${currentPoint.number + 1}. Time of receipt: ${good.materialLoadingTime} millisecond")
                 delay(good.materialLoadingTime)
@@ -66,6 +68,5 @@ class Warehouse {
             currentPoint.isAvailable = true
             cancel()
         }
-
     }
 }
