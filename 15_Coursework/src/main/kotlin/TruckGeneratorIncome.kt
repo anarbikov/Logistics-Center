@@ -1,8 +1,7 @@
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlin.random.Random
-
-class TruckGenerator {
+class TruckGeneratorIncome {
 
     private val allGoodsListNonFood = mutableListOf(Goods.Bricks, Goods.Cement, Goods.Nails, Goods.Laptop,
         Goods.Cartridges, Goods.Monitor, Goods.Fridge, Goods.Cooker, Goods.Washer)

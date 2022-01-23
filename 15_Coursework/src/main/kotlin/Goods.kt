@@ -1,4 +1,4 @@
-class Goods  {
+sealed class Goods  {
     object Milk: Material() {
         override val materialName: String = "Milk"
         override val materialWeight: Int = 2000

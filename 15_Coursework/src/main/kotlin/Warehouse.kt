@@ -1,39 +1,35 @@
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlin.random.Random
 
 class Warehouse {
-    var storagedFood: MutableList<Material> = mutableListOf()
-    var storagedSmall: MutableList<Material> = mutableListOf()
-    var storagedMedium: MutableList<Material> = mutableListOf()
-    var storagedBig: MutableList<Material> = mutableListOf()
+    private val storagedFood: MutableList<Material> = mutableListOf()
+    private val storagedSmall: MutableList<Material> = mutableListOf()
+    private val storagedMedium: MutableList<Material> = mutableListOf()
+    private val storagedBig: MutableList<Material> = mutableListOf()
 
-    suspend fun constantUnloading() {
-        while (true) {
-            channelSelectionAndLaunch()
-            delay(3000)
-        }
-    }
-
-    suspend fun channelSelectionAndLaunch() {
+    suspend fun channelSelectionAndUnload() {
         when {
-            UnloadingPoints.UnloadingPoint1.isAvailable -> receiveGoodsFromTruck(UnloadingPoints.UnloadingPoint1)
-            UnloadingPoints.UnloadingPoint2.isAvailable -> receiveGoodsFromTruck(
-                UnloadingPoints.UnloadingPoint2
+            UnloadingPoint1.isAvailable -> receiveGoodsFromTruck(UnloadingPoint1)
+           UnloadingPoint2.isAvailable -> receiveGoodsFromTruck(
+                UnloadingPoint2
             )
-            UnloadingPoints.UnloadingPoint3.isAvailable -> {
-                receiveGoodsFromTruck(UnloadingPoints.UnloadingPoint3)
+            UnloadingPoint3.isAvailable -> {
+                receiveGoodsFromTruck(UnloadingPoint3)
             }
             else -> {
                 println("All channels are locked, waiting for the available Unloading point ")
                 delay(2500)
                 println("Trying to unload the truck again ")
-                channelSelectionAndLaunch()
+                channelSelectionAndUnload()
             }
         }
     }
 
     private fun receiveGoodsFromTruck(currentPoint: UnloadingPoints) {
         val scope = CoroutineScope(Job() + Dispatchers.Default)
-        val a = TruckGenerator()
+        val a = TruckGeneratorIncome()
         val b = a.truck
         println(
             "New truck arrives to Warehouse to ${currentPoint.name}. The truck's capacity: ${b.weightCapacity}kg.\n" +
@@ -68,5 +64,85 @@ class Warehouse {
             currentPoint.isAvailable = true
             cancel()
         }
+    }
+
+    suspend fun dispatchGoods() {
+        val scope10 = CoroutineScope(Job() + Dispatchers.Default)
+        val scope20 = CoroutineScope(Job() + Dispatchers.Default)
+        val truck = TruckGeneratorOutcome()
+        val currentPoint = selectChannelForLoading()
+        val truckType = when (Random.nextInt(1, 3)) {
+            1 -> NineTonTruck()
+            2 -> TenTonTruck()
+            else -> TenTonTruck()
+        }
+        val goodsType = when (Random.nextInt(0, 5)) {
+            0 -> storagedFood
+            1 -> storagedSmall
+            2 -> storagedMedium
+            3 -> storagedBig
+            else -> storagedFood
+        }
+        goodsType.shuffle()
+
+        val printGoodsType = when (goodsType) {
+            storagedFood -> "Food goods category"
+            storagedSmall -> "Small goods category"
+            storagedMedium -> "Medium goods category"
+            storagedBig -> "Big goods category"
+            else -> "Initialization error"
+        }
+        print("New truck arrived to ${currentPoint.name}. The truck has ${truckType.weightCapacity} kg capacity. It needs to load $printGoodsType.\n")
+        currentPoint.isAvailable = false
+        println("Filling the truck with $printGoodsType has started, Loading point ${currentPoint.number + 1} is locked now ")
+        val filledTruck = addGoods(truck = truckType, goodsType = goodsType)    // Defining goods for delivery before loading
+        scope10.launch {
+            for (i in 0 until filledTruck.goodsOnBoard.size) {
+                currentPoint.channel.send(filledTruck.goodsOnBoard[i])
+            }
+        }
+        scope20.launch {
+            truck.loadGoodsAndLeave(currentPoint, filledTruck.goodsOnBoard,loadedWeight = truckType.currentWeightLoaded,capacity= truckType.weightCapacity)
+            currentPoint.isAvailable = true
+        }
+        }
+
+    private suspend fun selectChannelForLoading(): LoadingPoints {
+        var currentPoint: LoadingPoints = LoadingPoint1
+        when {
+            LoadingPoint1.isAvailable -> currentPoint = LoadingPoint1
+            LoadingPoint2.isAvailable -> currentPoint = LoadingPoint2
+            LoadingPoint3.isAvailable -> currentPoint = LoadingPoint3
+            LoadingPoint4.isAvailable -> currentPoint = LoadingPoint4
+            LoadingPoint5.isAvailable -> currentPoint = LoadingPoint5
+            else -> {
+                println("All Loading points are busy, waiting for the available Loading point")
+                delay(4500)
+                selectChannelForLoading()
+            }
+            }
+        return currentPoint
+    }
+    private val mutex = Mutex()
+    private suspend fun addGoods(truck:Trucks, goodsType: MutableList<Material>): Trucks {
+        mutex.withLock {
+        while (true) {
+            if (goodsType.size > 0) {
+                if (truck.currentWeightLoaded + goodsType.last().materialWeight <= truck.weightCapacity) {
+                    truck.goodsOnBoard.add(goodsType.last())
+//                    println("${goodsType.last()} loaded to truck. Current capacity ${truck.currentWeightLoaded} from ${truck.weightCapacity}")
+                    truck.currentWeightLoaded += goodsType.last().materialWeight
+                    goodsType.removeLast()
+                }
+                else break
+            }
+            else {
+                println("The storage is empty yet, waiting for filling the stock")
+                delay(5000)
+                continue
+            }
+        }
+        }
+        return truck
     }
 }
